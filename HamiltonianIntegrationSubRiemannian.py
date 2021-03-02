@@ -4,39 +4,32 @@ import matplotlib.pyplot as plt
 
 ### comments: 
 
-# def metric(q):
-#     # the metric which is written on geomstats
-#     return gs.array([
-#         [1/(1 + q[1]**4) , q[0]**2],
-#         [q[0]**2, 1. + 2*q[1]**3]])
-
 def metric(q):
-    # 2D Riemannian metric, i.e. a 2x2 matrix
+    # 3D Riemannian metric, i.e. a 3x3 matrix
     # q : basepoint in M
     
     return gs.array([
-        [1 + q[0] , 0],
-        [0, 1 + q[1]]])
+        [1 + q[0]**2 , 1, 1],
+        [0, 1 + q[1]**2, 2],
+        [0,0, 1]])
 
 def kinetic_energy_Riemannian(x): 
     q, p = x
     cometric = gs.linalg.inv(metric(q))
     return 1/2 * gs.einsum('i,ij,j', p, cometric, p)
 
-def kinetic_energy(x): 
+def kinetic_energy(x):
+    # sub-Riemannian kinetic energy (i.e. Hamiltonian)
+    # x: is in the form np.array([[q_1,q_2],[p_1,p_2]]), where q is interpreted as the M-coordinate
+    #    and p is the T^{\star}M-coordinate
+    
     q, p = x
 
     frame_matrix = global_r_frame_as_matrix(q) # full Riemannian frame, first 2 rows contains the SR frame
-    multiplied = np.einsum('ji,i->j', frame_matrix, p)
+    multiplied = gs.einsum('ji,i->j', frame_matrix, p)[0:2,] # pick out the dot-products of p with the SR frame
+    sumOfSquares = gs.einsum('i,i->', multiplied,multiplied)
     
-    
-    return 1/2 * (gs.einsum('i,i->',p,[0]['X'])**2 +
-                  gs.einsum('i,i->',p,global_r_frame(gs.array([q]))[0]['Y'])**2)
-
-def Hamiltonian(x):
-    # x: is on the form np.array([[q_1,q_2],[p_1,p_2]]), where q is interpreted as the M-coordinate
-    #    and p is the T^{\star}M-coordinate
-    return kinetic_energy(x)
+    return 1/2 * sumOfSquares
 
 def symp_grad(H):
     # i.e. the Hamiltonian vector field of H
@@ -80,11 +73,20 @@ def exp_SR(covector, point, n_steps=100):
     x = gs.array([point, covector]) # initial point in T^{\star}M
     return symp_flow(kinetic_energy,n_steps)(x)
 
-def main(init_tangent = gs.array([1.,1.]), init_position = gs.array([0.,0.]), n_steps = 20):
-    x = exp_SR(0.05 * init_tangent, init_position, n_steps) #? why the 0.05 factor?
-    plt.plot(x[:,0,0], x[:,0,1],'ro-')
+def main(init_cotangent = gs.array([1.,1.,0.5]), init_position = gs.array([0.,0.,0]), n_steps = 20):
+    x = exp_SR(0.05 * init_cotangent, init_position, n_steps) #? why the 0.05 factor?
+    fig = plt.figure()
+    ax  = plt.axes(projection='3d')
+    ax.plot3D(x[:,0,0], x[:,0,1],x[:,0,2],'ro-')
     plt.show()
-    return x
 
+    # check that the Hamiltonian is constant:
+    H_vec = [kinetic_energy(x[0])]
+    for i in range(0,len(x)): #? is 'len' backend-independent?
+        H_vec.append(kinetic_energy(x[i]))
+
+    plt.plot(range(0,len(H_vec)),H_vec)
+        
+    return [x,H_vec]
 
 
